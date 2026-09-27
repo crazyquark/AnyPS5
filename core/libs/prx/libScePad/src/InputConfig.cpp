@@ -3,6 +3,7 @@
 #include "SDL.h"
 
 #include <algorithm>
+#include <array>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -15,15 +16,51 @@ namespace {
 
 constexpr const char* ConfigFileName = "controls.cfg";
 
+// Stable name for each user-remappable entry in Pad::InputMapping, by index.
+// Bindings not listed here (the scroll-wheel D-pad triggers) aren't
+// key/mouse-driven and so aren't remappable via controls.cfg.
+struct NamedBinding {
+    std::size_t index;
+    const char* name;
+};
+
+constexpr std::array RemappableBindings{
+    NamedBinding{0, "toggle_fullscreen"},
+    NamedBinding{1, "cross"},
+    NamedBinding{2, "options"},
+    NamedBinding{3, "triangle"},
+    NamedBinding{4, "circle"},
+    NamedBinding{5, "square"},
+    NamedBinding{6, "l1"},
+    NamedBinding{7, "r1"},
+    NamedBinding{8, "l3"},
+    NamedBinding{9, "l3_alt"},
+    NamedBinding{10, "r3"},
+    NamedBinding{11, "r3_alt"},
+    NamedBinding{12, "dpad_up"},
+    NamedBinding{13, "dpad_right"},
+    NamedBinding{14, "dpad_down"},
+    NamedBinding{15, "dpad_left"},
+    NamedBinding{16, "stick_left_left"},
+    NamedBinding{17, "stick_left_right"},
+    NamedBinding{18, "stick_left_up"},
+    NamedBinding{19, "stick_left_down"},
+    NamedBinding{20, "stick_right_left"},
+    NamedBinding{21, "stick_right_right"},
+    NamedBinding{22, "stick_right_up"},
+    NamedBinding{23, "stick_right_down"},
+    NamedBinding{24, "touchpad_left"},
+    NamedBinding{25, "touchpad_right"},
+    NamedBinding{26, "toggle_mouse"},
+    NamedBinding{27, "r2"},
+    NamedBinding{28, "r1_alt"},
+};
+
 std::string trim(const std::string& s) {
     const auto begin = s.find_first_not_of(" \t\r\n");
     if (begin == std::string::npos) return "";
     const auto end = s.find_last_not_of(" \t\r\n");
     return s.substr(begin, end - begin + 1);
-}
-
-bool isRemappable(const InputBinding& binding) {
-    return binding.name != nullptr && (binding.key != SDL_SCANCODE_UNKNOWN || binding.mouseButton != 0);
 }
 
 std::string mouseButtonName(std::uint8_t button) {
@@ -47,12 +84,12 @@ void writeDefaultConfig(const std::filesystem::path& path) {
         << "# value is either an SDL key name (Space, A, Left Shift, F11, ...)\n"
         << "# or one of MOUSE_LEFT, MOUSE_RIGHT, MOUSE_MIDDLE.\n"
         << "# Delete this file to reset to defaults.\n\n";
-    for (const auto& binding : DefaultInputMapping) {
-        if (!isRemappable(binding)) continue;
+    for (const auto& entry : RemappableBindings) {
+        const auto& binding = InputMapping[entry.index];
         const std::string value = binding.key != SDL_SCANCODE_UNKNOWN
             ? SDL_GetScancodeName(binding.key)
             : mouseButtonName(binding.mouseButton);
-        out << binding.name << " = " << value << "\n";
+        out << entry.name << " = " << value << "\n";
     }
     std::ofstream file(path, std::ios::binary);
     if (!file.is_open()) throw std::runtime_error("InputConfig: failed to create " + path.string());
@@ -61,7 +98,7 @@ void writeDefaultConfig(const std::filesystem::path& path) {
 }
 
 std::vector<InputBinding> loadMapping() {
-    std::vector<InputBinding> mapping(DefaultInputMapping.begin(), DefaultInputMapping.end());
+    std::vector<InputBinding> mapping(InputMapping.begin(), InputMapping.end());
     const std::filesystem::path path = std::filesystem::current_path() / ConfigFileName;
 
     if (!std::filesystem::exists(path)) {
@@ -81,19 +118,20 @@ std::vector<InputBinding> loadMapping() {
         const std::string name = trim(trimmed.substr(0, separator));
         const std::string value = trim(trimmed.substr(separator + 1));
 
-        const auto it = std::find_if(mapping.begin(), mapping.end(), [&](const InputBinding& binding) {
-            return isRemappable(binding) && name == binding.name;
+        const auto it = std::find_if(RemappableBindings.begin(), RemappableBindings.end(), [&](const NamedBinding& entry) {
+            return name == entry.name;
         });
-        if (it == mapping.end()) throw std::runtime_error("InputConfig: unknown binding name \"" + name + "\"");
+        if (it == RemappableBindings.end()) throw std::runtime_error("InputConfig: unknown binding name \"" + name + "\"");
+        auto& binding = mapping[it->index];
 
         if (value.rfind("MOUSE_", 0) == 0) {
-            it->mouseButton = mouseButtonFromName(value);
-            it->key = SDL_SCANCODE_UNKNOWN;
+            binding.mouseButton = mouseButtonFromName(value);
+            binding.key = SDL_SCANCODE_UNKNOWN;
         } else {
             const SDL_Scancode scancode = SDL_GetScancodeFromName(value.c_str());
             if (scancode == SDL_SCANCODE_UNKNOWN) throw std::runtime_error("InputConfig: unknown key name \"" + value + "\" for \"" + name + "\"");
-            it->key = scancode;
-            it->mouseButton = 0;
+            binding.key = scancode;
+            binding.mouseButton = 0;
         }
     }
     return mapping;

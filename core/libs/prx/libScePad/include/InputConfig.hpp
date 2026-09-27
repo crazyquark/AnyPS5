@@ -6,9 +6,10 @@
 
 namespace Pad {
 
-// The active input mapping: DefaultInputMapping overridden by whatever is in
+// Pad::InputMapping (compile-time defaults) overridden by whatever is in
 // controls.cfg next to the executable (created with defaults on first run,
-// see InputConfig.cpp). Loaded once, lazily, and cached for the process.
+// see InputConfig.cpp). Same size and order as InputMapping always; only
+// key/mouseButton can be overridden. Loaded once, lazily, and cached.
 const std::vector<InputBinding>& GetInputMapping();
 
 }

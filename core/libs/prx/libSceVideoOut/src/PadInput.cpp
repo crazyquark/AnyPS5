@@ -1,16 +1,12 @@
 #include "prx/libSceVideoOut/include/PadInput.hpp"
 #include "prx/libSceVideoOut/include/DisplayWindow.hpp"
+#include "prx/libScePad/include/InputConfig.hpp"
 #include "prx/libScePad/include/PadState.hpp"
 #include "SDL.h"
 #include <algorithm>
 #include <cmath>
 #include <stdexcept>
 #include <string>
-
-PadInput::PadInput()
-    : mapping(Pad::GetInputMapping()),
-      pressed(mapping.size(), false),
-      wheelReleaseTimes(mapping.size()) {}
 
 void PadInput::setMouseMode(bool enabled) {
     if (SDL_SetRelativeMouseMode(enabled ? SDL_TRUE : SDL_FALSE) != 0) throw std::runtime_error(std::string("Pad: relative mouse mode failed: ") + SDL_GetError());
@@ -23,6 +19,7 @@ void PadInput::setMouseMode(bool enabled) {
 }
 
 void PadInput::HandleEvent(const SDL_Event& event, DisplayWindow& window) {
+    const auto& mapping = Pad::GetInputMapping();
     if (event.type == SDL_WINDOWEVENT && (event.window.event == SDL_WINDOWEVENT_FOCUS_LOST || event.window.event == SDL_WINDOWEVENT_CLOSE)) {
         std::fill(pressed.begin(), pressed.end(), false);
         std::fill(wheelReleaseTimes.begin(), wheelReleaseTimes.end(), std::chrono::steady_clock::time_point{});
@@ -63,6 +60,7 @@ void PadInput::HandleEvent(const SDL_Event& event, DisplayWindow& window) {
 }
 
 void PadInput::Update() {
+    const auto& mapping = Pad::GetInputMapping();
     const auto now = std::chrono::steady_clock::now();
     bool released = false;
     for (std::size_t index = 0; index < mapping.size(); ++index) {
@@ -96,6 +94,7 @@ void PadInput::Update() {
 }
 
 void PadInput::publish() {
+    const auto& mapping = Pad::GetInputMapping();
     PadInputState state;
     std::array<bool, 4> negative{};
     std::array<bool, 4> positive{};
